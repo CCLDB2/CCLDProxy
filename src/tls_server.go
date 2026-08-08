@@ -44,7 +44,7 @@ func (s *TLSServer) handle(conn net.Conn) {
 		return
 	}
 	s.logger.Infof("TLS cliente: %s", trim(line))
-	_, _, wsKey, err := readHeaders(br)
+	_, _, wsKey, _, err := readHeaders(br)
 	if err != nil {
 		return
 	}
@@ -55,7 +55,7 @@ func (s *TLSServer) handle(conn net.Conn) {
 		return
 	}
 
-	payload := readAvailable(br, conn, 3*time.Second, 0)
+	payload := readAvailable(br, conn, 3*time.Second, 0, nil)
 	backend := detectBackend(payload, s.cfg.Backend)
 	if backend == nil {
 		s.logger.Errorf("protocolo no reconocido")

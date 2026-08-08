@@ -20,16 +20,19 @@ func readLine(br *bufio.Reader) (string, error) {
 }
 
 // readHeaders lee headers HTTP hasta la linea en blanco.
-// Devuelve Upgrade, User-Agent y Sec-WebSocket-Key.
-func readHeaders(br *bufio.Reader) (upgrade, agent, wsKey string, err error) {
+// Devuelve Upgrade, User-Agent, Sec-WebSocket-Key y el bloque crudo completo.
+func readHeaders(br *bufio.Reader) (upgrade, agent, wsKey, raw string, err error) {
+	var sb strings.Builder
 	for {
 		line, e := readLine(br)
 		if e != nil {
-			return upgrade, agent, wsKey, e
+			return upgrade, agent, wsKey, sb.String(), e
 		}
 		if line == "" {
 			break
 		}
+		sb.WriteString(line)
+		sb.WriteString(" | ")
 		lower := strings.ToLower(line)
 		switch {
 		case strings.HasPrefix(lower, "upgrade:"):
@@ -40,13 +43,14 @@ func readHeaders(br *bufio.Reader) (upgrade, agent, wsKey string, err error) {
 			wsKey = strings.TrimSpace(line[len("sec-websocket-key:"):])
 		}
 	}
-	return upgrade, agent, wsKey, nil
+	return upgrade, agent, wsKey, sb.String(), nil
 }
 
 // readAvailable espera el payload inicial del cliente (con timeout) para
-// poder detectar el protocolo. Las apps envian GET+Upgrade, esperan el 101,
-// y recien entonces mandan el payload. Por eso hay que esperar en el socket.
-func readAvailable(br *bufio.Reader, conn net.Conn, timeout time.Duration, max int) []byte {
+// poder detectar el protocolo. Devuelve el payload crudo y, en dbg, loguea
+// cada chunk recibido para ver el formato real (puede venir como frames
+// websocket marcados si Cloudflare los envuelve).
+func readAvailable(br *bufio.Reader, conn net.Conn, timeout time.Duration, max int, dbg func(string)) []byte {
 	var buf []byte
 
 	// 1) Lo que ya quede en el buffer (si envio payload junto con el request)
@@ -54,17 +58,24 @@ func readAvailable(br *bufio.Reader, conn net.Conn, timeout time.Duration, max i
 		tmp := make([]byte, br.Buffered())
 		if _, err := io.ReadFull(br, tmp); err == nil {
 			buf = append(buf, tmp...)
+			if dbg != nil {
+				dbg("buffered: " + hexDump(buf))
+			}
 		}
 	}
 	// 2) Esperar mas datos en el socket con timeout
 	if conn != nil && len(buf) == 0 {
 		buf = make([]byte, 0)
-		tmp := make([]byte, 1024)
+		tmp := make([]byte, 2048)
 		conn.SetReadDeadline(time.Now().Add(timeout))
 		for {
 			n, err := conn.Read(tmp)
 			if n > 0 {
-				buf = append(buf, tmp[:n]...)
+				chunk := append([]byte(nil), tmp[:n]...)
+				buf = append(buf, chunk...)
+				if dbg != nil {
+					dbg("chunk: " + hexDump(chunk))
+				}
 				if len(buf) >= 4 { // suficiente para detectar SSH/OpenVPN/V2Ray
 					break
 				}

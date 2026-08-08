@@ -62,20 +62,23 @@ func (s *Server) handleClient(c *Client) {
 	s.logger.Infof("cliente %s pidio: %s", c.ip, trim(line))
 
 	// Leer headers hasta linea en blanco, capturando Upgrade, User-Agent y key
-	_, agent, wsKey, err := readHeaders(br)
+	_, agent, wsKey, rawHdr, err := readHeaders(br)
 	if err != nil {
 		return
 	}
 	c.agent = agent
+	s.logger.Infof("headers: %s", trim(rawHdr))
 
 	// Responder 101 con handshake websocket RFC 6455 (si el cliente mando key).
 	if err := writeUpgrade(c.conn, wsKey); err != nil {
 		return
 	}
 
-	// Detectar protocolo por el primer payload. Esperamos hasta 3s a que
-	// el cliente envie el payload tras recibir el 101.
-	payload := readAvailable(br, c.conn, 3*time.Second, 0)
+	// Detectar protocolo por el primer payload. Esperamos hasta 5s a que
+	// el cliente envie el payload tras recibir el 101. Logueamos cada chunk.
+	payload := readAvailable(br, c.conn, 5*time.Second, 0, func(msg string) {
+		s.logger.Infof("recv: %s", msg)
+	})
 	s.logger.Infof("payload(%d): %s", len(payload), hexDump(payload))
 	backend := detectBackend(payload, s.cfg.Backend)
 	if backend == nil {

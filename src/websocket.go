@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/sha1"
 	"encoding/base64"
-	"fmt"
 	"net"
 )
 
@@ -16,26 +15,20 @@ func wsAccept(key string) string {
 	return base64.StdEncoding.EncodeToString(h[:])
 }
 
-// writeUpgrade responde el handshake del websocket. Si el cliente envio
-// Sec-WebSocket-Key, devolvemos un upgrade RFC 6455 completo (necesario para
-// que Cloudflare/cloudflared reconozcan el websocket y reenvien el payload).
-// Si no hay key, respondemos un 101 generico (compatibilidad con clientes
-// que no usan websocket estandar).
+// writeUpgrade responde el handshake del websocket replicando el formato
+// que usa SSHPLUS (HTTP/1.1 101 WebSocket), que es el que las apps tipo
+// "NPV tunnel" y Cloudflare aceptan para abrir el tunel de bytes.
+// Si el cliente envio Sec-WebSocket-Key, ademas incluimos el Accept RFC 6455.
 func writeUpgrade(conn net.Conn, wsKey string) error {
-	if wsKey == "" {
-		_, err := conn.Write([]byte("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n"))
-		return err
+	accept := ""
+	if wsKey != "" {
+		accept = "\r\nSec-WebSocket-Accept: " + wsAccept(wsKey)
 	}
-	accept := wsAccept(wsKey)
-	resp := fmt.Sprintf(
-		"HTTP/1.1 101 Switching Protocols\r\n"+
-			"Upgrade: websocket\r\n"+
-			"Connection: Upgrade\r\n"+
-			"Sec-WebSocket-Accept: %s\r\n"+
-			"Sec-WebSocket-Version: 13\r\n"+
-			"\r\n",
-		accept,
-	)
+	resp := "HTTP/1.1 101 WebSocket\r\n" +
+		"Upgrade: websocket\r\n" +
+		"Connection: Upgrade" +
+		accept +
+		"\r\n\r\n"
 	_, err := conn.Write([]byte(resp))
 	return err
 }

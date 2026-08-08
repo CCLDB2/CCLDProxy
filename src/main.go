@@ -11,6 +11,12 @@ import (
 	"sync"
 )
 
+// version del motor.
+const version = "0.1.0"
+
+// printVersion es el flag --version.
+var printVersion *bool
+
 // Config es la configuracion cargada de flags.
 type Config struct {
 	Token      string
@@ -37,6 +43,12 @@ type Backend struct {
 
 func main() {
 	cfg := parseFlags()
+
+	// --version / --v imprime la version del motor y sale
+	if *printVersion {
+		fmt.Printf("ccldproxy %s\n", version)
+		return
+	}
 
 	if cfg.Validate {
 		// Validacion local: en esta reescritura no hay servidor externo.
@@ -92,6 +104,7 @@ func parseFlags() *Config {
 	flag.IntVar(&cfg.BufferSize, "buffer-size", 16384, "tamano de buffer")
 	flag.IntVar(&cfg.MaxPerIP, "max-per-ip", 0, "limite de conexiones por IP (0 = sin limite)")
 	flag.BoolVar(&cfg.Quiet, "quiet", false, "modo silencioso")
+	printVersion = flag.Bool("version", false, "mostrar version del motor y salir")
 	flag.Parse()
 
 	// Backends por defecto (los que usan las apps)

@@ -12,16 +12,14 @@ Servidor de túneles SSH/OpenVPN/V2Ray (motor `proxy`) con menú (`ccldproxy`) p
 
 ## Instalación por enlace
 
-Tras subir este repo a GitHub (privado), reemplaza `USUARIO` por tu usuario y ejecuta:
-
 ```bash
-bash <(curl -sL https://raw.githubusercontent.com/USUARIO/ccldproxy/main/install.sh)
+bash <(curl -sL https://raw.githubusercontent.com/CCLDB2/CCLDProxy/main/install.sh)
 ```
 
 O bien:
 
 ```bash
-curl -sL -o install.sh https://raw.githubusercontent.com/USUARIO/ccldproxy/main/install.sh
+curl -sL -o install.sh https://raw.githubusercontent.com/CCLDB2/CCLDProxy/main/install.sh
 bash install.sh
 ```
 

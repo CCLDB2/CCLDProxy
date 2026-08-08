@@ -4,15 +4,15 @@
 #  Servidor de tuneles SSH/OpenVPN/V2Ray (proxy) + menu (ccldproxy)
 #  Uso personal / amigos. No incluye panel SSHPlus.
 #
-#  Instalacion por enlace (despues de subir a GitHub):
-#    bash <(curl -sL https://raw.githubusercontent.com/USUARIO/ccldproxy/main/install.sh)
+#  Instalacion por enlace:
+#    bash <(curl -sL https://raw.githubusercontent.com/CCLDB2/CCLDProxy/main/install.sh)
 #============================================================================
 
 set -e
 
 CCLD_BIN="ccldproxy"
 PROXY_BIN="proxy"
-BASE_URL="${CCLD_URL:-https://raw.githubusercontent.com/USUARIO/ccldproxy/main}"
+BASE_URL="${CCLD_URL:-https://raw.githubusercontent.com/CCLDB2/CCLDProxy/main}"
 INSTALL_DIR="/usr/bin"
 LISTEN_PORT="${CCLD_PORT:-80}"
 

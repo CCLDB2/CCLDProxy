@@ -51,7 +51,7 @@ func (s *TLSServer) handle(conn net.Conn) {
 	// Limpiar deadline tras el handshake HTTP
 	conn.SetDeadline(time.Time{})
 
-	if err := writeUpgrade(conn, wsKey); err != nil {
+	if err := writeUpgrade(conn, wsKey, true); err != nil {
 		return
 	}
 

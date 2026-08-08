@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -69,8 +70,14 @@ func (s *Server) handleClient(c *Client) {
 	c.agent = agent
 	s.logger.Infof("headers: %s", trim(rawHdr))
 
-	// Responder 101 con handshake websocket RFC 6455 (si el cliente mando key).
-	if err := writeUpgrade(c.conn, wsKey); err != nil {
+	// Detectar si la conexion viene de Cloudflare (cf-ray / cdn-loop).
+	// CF exige un handshake websocket RFC 6455 completo para abrir el tunel;
+	// sin el, intercepta y no reenvia el payload. La conexion directa solo
+	// necesita el 101 simple.
+	viaCF := strings.Contains(rawHdr, "cloudflare") || strings.Contains(rawHdr, "cf-ray")
+
+	// Responder handshake: completo RFC 6455 si viene de Cloudflare, 101 simple si directo.
+	if err := writeUpgrade(c.conn, wsKey, viaCF); err != nil {
 		return
 	}
 

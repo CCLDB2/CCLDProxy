@@ -4,7 +4,7 @@
 #  Ejecutar como root:  dtmenu
 #============================================================================
 
-CCLD_VERSION="0.1.4"
+CCLD_VERSION="0.1.5"
 
 CCLD_BIN="/usr/bin/ccldproxy"
 CONF_DIR="/etc/ccldproxy"

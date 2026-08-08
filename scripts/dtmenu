@@ -41,7 +41,7 @@ EOF
 
 # --- Estado del servicio ---------------------------------------------------
 status() {
-  if systemctl is-active --quiet "$SERVICE" 2>/dev/null; then
+  if pgrep -f "^$CCLD_BIN " >/dev/null 2>&1; then
     green "[ATIVO]"
   else
     red "[PARADO]"
@@ -49,26 +49,53 @@ status() {
 }
 
 # --- Arrancar / reiniciar --------------------------------------------------
+has_systemd() { command -v systemctl >/dev/null 2>&1; }
+
+run_cmd() {
+  local q=""
+  [[ "$QUIET" = "yes" ]] && q=" --quiet"
+  echo "$CCLD_BIN --token $TOKEN --port $PORT --max-per-ip $MAXIP$q"
+}
+
 start_service() {
-  # regenerar unidad systemd
-  cat > /etc/systemd/system/ccldproxy.service <<EOF
+  local cmd; cmd="$(run_cmd)"
+  # detener instancias previas
+  pkill -f "^$CCLD_BIN " 2>/dev/null
+  if has_systemd && systemctl daemon-reload >/dev/null 2>&1; then
+    cat > /etc/systemd/system/ccldproxy.service <<EOF
 [Unit]
 Description=ccldproxy - servidor de tuneles
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=$CCLD_BIN --token $TOKEN --port $PORT --max-per-ip $MAXIP $([ "$QUIET" = "yes" ] && echo --quiet)
+ExecStart=$cmd
 Restart=on-failure
 RestartSec=2
 
 [Install]
 WantedBy=multi-user.target
 EOF
-  systemctl daemon-reload
-  systemctl enable "$SERVICE" >/dev/null 2>&1
-  systemctl restart "$SERVICE"
-  green "Servicio $SERVICE reiniciado."
+    systemctl daemon-reload
+    systemctl enable "$SERVICE" >/dev/null 2>&1
+    systemctl restart "$SERVICE"
+    green "Servicio $SERVICE reiniciado."
+  else
+    # sin systemd: lanzar en background
+    mkdir -p /var/log/ccldproxy
+    nohup $cmd >> /var/log/ccldproxy/ccldproxy.log 2>&1 &
+    green "Servicio $SERVICE arrancado (sin systemd). Log: /var/log/ccldproxy/ccldproxy.log"
+  fi
+}
+
+stop_service() {
+  if has_systemd && systemctl is-active --quiet "$SERVICE" 2>/dev/null; then
+    systemctl stop "$SERVICE"
+    green "Servicio $SERVICE detenido."
+  else
+    pkill -f "^$CCLD_BIN " 2>/dev/null
+    green "Servicio detenido."
+  fi
 }
 
 # --- Menu ------------------------------------------------------------------
@@ -106,10 +133,14 @@ while true; do
     5)
       load_conf; [ "$QUIET" = "yes" ] && QUIET="no" || QUIET="yes"; save_conf; start_service ;;
     6) load_conf; start_service ;;
-    7)
-      systemctl stop "$SERVICE"; green "Servicio detenido." ;;
+    7) stop_service ;;
     8)
-      journalctl -u "$SERVICE" -n 30 --no-pager; read -rp "Enter..." x ;;
+      if has_systemd && systemctl is-active --quiet "$SERVICE" 2>/dev/null; then
+        journalctl -u "$SERVICE" -n 30 --no-pager
+      else
+        tail -n 30 /var/log/ccldproxy/ccldproxy.log 2>/dev/null || echo "(sin logs aun)"
+      fi
+      read -rp "Enter..." x ;;
     9)
       bash /usr/bin/user.sh; read -rp "Enter..." x ;;
     00)

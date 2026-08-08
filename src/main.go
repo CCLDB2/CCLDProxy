@@ -12,7 +12,7 @@ import (
 )
 
 // version del motor.
-const version = "0.1.1"
+const version = "0.1.2"
 
 // printVersion es el flag --version.
 var printVersion *bool

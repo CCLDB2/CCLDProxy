@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"net"
 	"strings"
@@ -119,4 +120,29 @@ func trim(s string) string {
 		return s[:120]
 	}
 	return s
+}
+
+// hexDump muestra los primeros bytes del payload en hexadecimal y como texto,
+// para diagnosticar el formato real que llega del cliente.
+func hexDump(b []byte) string {
+	if len(b) == 0 {
+		return "(vacio)"
+	}
+	if len(b) > 64 {
+		b = b[:64]
+	}
+	var hex strings.Builder
+	var ascii strings.Builder
+	for i, c := range b {
+		hex.WriteString(fmt.Sprintf("%02x ", c))
+		if c >= 32 && c <= 126 {
+			ascii.WriteRune(rune(c))
+		} else {
+			ascii.WriteString(".")
+		}
+		if i%16 == 15 {
+			hex.WriteString("| ")
+		}
+	}
+	return hex.String() + "  [" + ascii.String() + "]"
 }

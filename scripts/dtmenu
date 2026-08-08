@@ -118,23 +118,67 @@ while true; do
   read -rp "Opcion: " opt
   case "$opt" in
     1)
+      clear
       load_conf
+      echo "=== Configuracion ==="
       echo "Token:  ${TOKEN:-(sin definir)}"
       echo "Puerto: $PORT"
       echo "Max/IP: $MAXIP"
       echo "Quiet:  $QUIET"
       read -rp "Enter para continuar..." x ;;
     2)
-      load_conf; read -rp "Nuevo token: " TOKEN; save_conf; start_service ;;
+      clear
+      load_conf
+      echo "=== Cambiar token ==="
+      read -rp "Nuevo token: " TOKEN
+      if [[ -z "$TOKEN" ]]; then
+        red "El token no puede estar vacio. No se guardo."
+      else
+        save_conf; start_service
+      fi
+      read -rp "Enter..." x ;;
     3)
-      load_conf; read -rp "Nuevo puerto: " PORT; save_conf; start_service ;;
+      clear
+      load_conf
+      echo "=== Cambiar puerto ==="
+      read -rp "Nuevo puerto: " PORT
+      if ! [[ "$PORT" =~ ^[0-9]+$ ]] || [[ "$PORT" -lt 1 || "$PORT" -gt 65535 ]]; then
+        red "Puerto invalido. No se guardo."
+        PORT="$(grep '^PORT=' "$CONF_FILE" 2>/dev/null | cut -d= -f2)"
+      else
+        save_conf; start_service
+      fi
+      read -rp "Enter..." x ;;
     4)
-      load_conf; read -rp "Max conexiones por IP (0=sin limite): " MAXIP; save_conf; start_service ;;
+      clear
+      load_conf
+      echo "=== Limite por IP ==="
+      read -rp "Max conexiones por IP (0=sin limite): " MAXIP
+      if ! [[ "$MAXIP" =~ ^[0-9]+$ ]]; then
+        red "Valor invalido. No se guardo."
+        MAXIP="$(grep '^MAXIP=' "$CONF_FILE" 2>/dev/null | cut -d= -f2)"
+      else
+        save_conf; start_service
+      fi
+      read -rp "Enter..." x ;;
     5)
-      load_conf; [ "$QUIET" = "yes" ] && QUIET="no" || QUIET="yes"; save_conf; start_service ;;
-    6) load_conf; start_service ;;
-    7) stop_service ;;
+      clear
+      load_conf
+      [ "$QUIET" = "yes" ] && QUIET="no" || QUIET="yes"
+      save_conf; start_service
+      echo "Modo silencioso: $QUIET"
+      read -rp "Enter..." x ;;
+    6)
+      clear
+      load_conf; start_service
+      read -rp "Enter..." x ;;
+    7)
+      clear
+      stop_service
+      read -rp "Enter..." x ;;
     8)
+      clear
+      echo "=== Logs ==="
       if has_systemd && systemctl is-active --quiet "$SERVICE" 2>/dev/null; then
         journalctl -u "$SERVICE" -n 30 --no-pager
       else
@@ -142,7 +186,26 @@ while true; do
       fi
       read -rp "Enter..." x ;;
     9)
-      bash /usr/bin/user.sh; read -rp "Enter..." x ;;
+      clear
+      echo "=== Gestion de usuarios SSH ==="
+      echo "  [1] Crear usuario"
+      echo "  [2] Listar usuarios"
+      echo "  [3] Borrar usuario"
+      echo "  [4] Cambiar password"
+      echo "  [5] Cambiar nombre"
+      echo "  [6] Cambiar fecha de expiracion"
+      echo "  [0] Volver"
+      read -rp "Opcion: " uopt
+      case "$uopt" in
+        1) bash /usr/bin/user.sh crear ;;
+        2) bash /usr/bin/user.sh listar ;;
+        3) bash /usr/bin/user.sh borrar ;;
+        4) bash /usr/bin/user.sh pass ;;
+        5) bash /usr/bin/user.sh nombre ;;
+        6) bash /usr/bin/user.sh vence ;;
+        *) ;;
+      esac
+      read -rp "Enter..." x ;;
     00)
       green "Saindo..."; exit 0 ;;
     *) red "Opcion invalida." ;;

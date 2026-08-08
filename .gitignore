@@ -1,0 +1,16 @@
+# Datos personales / no subir
+*~[0-9]*
+*.swp
+.DS_Store
+Thumbs.db
+.env
+config.json
+
+# Tokens y archivos locales del servidor
+*.token
+*token*
+
+# No incluir el panel SSHPlus ni análisis internos
+TMY-SSH-PRO/
+binario-analisis/
+docs/

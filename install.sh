@@ -10,6 +10,9 @@
 
 set -e
 
+# No abortar en pasos opcionales; solo fallar en criticos
+set +e
+
 CCLD_BIN="ccldproxy"
 PROXY_BIN="proxy"
 BASE_URL="${CCLD_URL:-https://raw.githubusercontent.com/CCLDB2/CCLDProxy/main}"
@@ -73,15 +76,22 @@ install -m 0755 "$TMP/$PROXY_BIN" "$INSTALL_DIR/$PROXY_BIN"
 install -m 0755 "$TMP/$CCLD_BIN"  "$INSTALL_DIR/$CCLD_BIN"
 rm -rf "$TMP"
 
-# --- Configurar sshd (gestor ssh) ----------------------------------------
-green "Configurando SSH..."
-# Puerto SSH
-if grep -q '^#Port 22' /etc/ssh/sshd_config; then
-  sed -i 's/^#Port 22/Port 22/' /etc/ssh/sshd_config
+# --- Instalar OpenSSH server (gestor ssh) ---------------------------------
+green "Instalando/configurando OpenSSH..."
+apt-get install -y --no-install-recommends openssh-server >/dev/null 2>&1 || true
+if command -v sshd >/dev/null 2>&1; then
+  SSHD_CFG="$(sshd -T 2>/dev/null | grep -i '^configfile' | awk '{print $2}')"
+  SSHD_CFG="${SSHD_CFG:-/etc/ssh/sshd_config}"
+else
+  SSHD_CFG="/etc/ssh/sshd_config"
 fi
+# Puerto SSH
+grep -q '^Port 22' "$SSHD_CFG" 2>/dev/null || sed -i 's/^#Port 22/Port 22/' "$SSHD_CFG" 2>/dev/null || true
 # Permitir login por password (para usuarios creados)
-sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
-grep -q '^PasswordAuthentication' /etc/ssh/sshd_config || echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
+sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' "$SSHD_CFG" 2>/dev/null || true
+grep -q '^PasswordAuthentication' "$SSHD_CFG" 2>/dev/null || echo "PasswordAuthentication yes" >> "$SSHD_CFG"
+
+systemctl restart ssh >/dev/null 2>&1 || service ssh restart >/dev/null 2>&1 || true
 # Permitir acceso root por password (opcional, descomenta si lo quieres)
 # sed -i 's/^PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
 

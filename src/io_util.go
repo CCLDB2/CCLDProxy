@@ -40,15 +40,40 @@ func readHeaders(br *bufio.Reader) (upgrade, agent string, err error) {
 	return upgrade, agent, nil
 }
 
-// readAvailable lee lo que ya haya disponible en el buffer y del socket,
-// con un breve timeout, sin bloquear indefinidamente.
-func readAvailable(br *bufio.Reader, max int) []byte {
+// readAvailable espera el payload inicial del cliente (con timeout) para
+// poder detectar el protocolo. Las apps envian GET+Upgrade, esperan el 101,
+// y recien entonces mandan el payload. Por eso hay que esperar en el socket.
+func readAvailable(br *bufio.Reader, conn net.Conn, timeout time.Duration, max int) []byte {
 	var buf []byte
+
+	// 1) Lo que ya quede en el buffer (si envio payload junto con el request)
 	if br.Buffered() > 0 {
 		tmp := make([]byte, br.Buffered())
 		if _, err := io.ReadFull(br, tmp); err == nil {
 			buf = append(buf, tmp...)
 		}
+	}
+	// 2) Esperar mas datos en el socket con timeout
+	if conn != nil && len(buf) == 0 {
+		buf = make([]byte, 0)
+		tmp := make([]byte, 1024)
+		conn.SetReadDeadline(time.Now().Add(timeout))
+		for {
+			n, err := conn.Read(tmp)
+			if n > 0 {
+				buf = append(buf, tmp[:n]...)
+				if len(buf) >= 4 { // suficiente para detectar SSH/OpenVPN/V2Ray
+					break
+				}
+			}
+			if err != nil {
+				break
+			}
+		}
+		conn.SetReadDeadline(time.Time{})
+	}
+	if max > 0 && len(buf) > max {
+		buf = buf[:max]
 	}
 	return buf
 }

@@ -74,8 +74,9 @@ func (s *Server) handleClient(c *Client) {
 		return
 	}
 
-	// Detectar protocolo por el primer payload (puede venir en br ya leido)
-	payload := readAvailable(br, 0)
+	// Detectar protocolo por el primer payload. Esperamos hasta 3s a que
+	// el cliente envie el payload tras recibir el 101.
+	payload := readAvailable(br, c.conn, 3*time.Second, 0)
 	backend := detectBackend(payload, s.cfg.Backend)
 	if backend == nil {
 		s.logger.Errorf("protocolo no reconocido de %s", c.ip)

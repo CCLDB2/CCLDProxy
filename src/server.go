@@ -81,16 +81,26 @@ func (s *Server) handleClient(c *Client) {
 		return
 	}
 
-	// Detectar protocolo por el primer payload. Esperamos hasta 5s a que
-	// el cliente envie el payload tras recibir el 101. Logueamos cada chunk.
-	payload := readAvailable(br, c.conn, 5*time.Second, 0, func(msg string) {
+	// Detectar protocolo por el primer payload. Esperamos un timeout CORTO a
+	// que el cliente envie el payload tras recibir el 101. Algunos clientes
+	// (NPV a traves de Cloudflare) NO envian su payload hasta que reciben el
+	// banner del servidor backend primero. Por eso, si no llega payload a
+	// tiempo, asumimos SSH y dejamos que el bridge (el servidor OpenSSH habla
+	// primero) desbloquee la conexion.
+	payload := readAvailable(br, c.conn, 1200*time.Millisecond, 0, func(msg string) {
 		s.logger.Infof("recv: %s", msg)
 	})
 	s.logger.Infof("payload(%d): %s", len(payload), hexDump(payload))
 	backend := detectBackend(payload, s.cfg.Backend)
 	if backend == nil {
-		s.logger.Errorf("protocolo no reconocido de %s", c.ip)
-		return
+		// Sin payload del cliente: el cliente esta esperando el banner del
+		// servidor SSH. Conectamos al backend SSH y el bridge lo desbloquea.
+		backend = findBackend(s.cfg.Backend, "SSH")
+		if backend == nil {
+			s.logger.Errorf("protocolo no reconocido de %s", c.ip)
+			return
+		}
+		s.logger.Infof("sin payload del cliente; asumiendo SSH (espera banner del servidor)")
 	}
 	s.logger.Infof("Modo: %s -> %s:%d", backend.Name, backend.Host, backend.Port)
 
@@ -110,6 +120,16 @@ func (s *Server) handleClient(c *Client) {
 
 	// Reenvio bidireccional
 	bridge(c.conn, up, s.cfg.BufferSize, s.logger, c.ip)
+}
+
+// findBackend devuelve el backend por nombre (ej: "SSH").
+func findBackend(backends []Backend, name string) *Backend {
+	for i := range backends {
+		if backends[i].Name == name {
+			return &backends[i]
+		}
+	}
+	return nil
 }
 
 // detectBackend elige el protocolo por el payload inicial.

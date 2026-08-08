@@ -55,11 +55,15 @@ func (s *TLSServer) handle(conn net.Conn) {
 		return
 	}
 
-	payload := readAvailable(br, conn, 3*time.Second, 0, nil)
+	payload := readAvailable(br, conn, 1200*time.Millisecond, 0, nil)
 	backend := detectBackend(payload, s.cfg.Backend)
 	if backend == nil {
-		s.logger.Errorf("protocolo no reconocido")
-		return
+		backend = findBackend(s.cfg.Backend, "SSH")
+		if backend == nil {
+			s.logger.Errorf("protocolo no reconocido")
+			return
+		}
+		s.logger.Infof("sin payload del cliente; asumiendo SSH (espera banner del servidor)")
 	}
 	addr := fmt.Sprintf("%s:%d", backend.Host, backend.Port)
 	up, err := net.DialTimeout("tcp", addr, 5*time.Second)

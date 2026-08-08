@@ -19,12 +19,12 @@ func readLine(br *bufio.Reader) (string, error) {
 }
 
 // readHeaders lee headers HTTP hasta la linea en blanco.
-// Devuelve la cabecera Upgrade y el User-Agent.
-func readHeaders(br *bufio.Reader) (upgrade, agent string, err error) {
+// Devuelve Upgrade, User-Agent y Sec-WebSocket-Key.
+func readHeaders(br *bufio.Reader) (upgrade, agent, wsKey string, err error) {
 	for {
 		line, e := readLine(br)
 		if e != nil {
-			return upgrade, agent, e
+			return upgrade, agent, wsKey, e
 		}
 		if line == "" {
 			break
@@ -35,9 +35,11 @@ func readHeaders(br *bufio.Reader) (upgrade, agent string, err error) {
 			upgrade = strings.TrimSpace(line[len("upgrade:"):])
 		case strings.HasPrefix(lower, "user-agent:"):
 			agent = strings.TrimSpace(line[len("user-agent:"):])
+		case strings.HasPrefix(lower, "sec-websocket-key:"):
+			wsKey = strings.TrimSpace(line[len("sec-websocket-key:"):])
 		}
 	}
-	return upgrade, agent, nil
+	return upgrade, agent, wsKey, nil
 }
 
 // readAvailable espera el payload inicial del cliente (con timeout) para

@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"crypto/tls"
 	"fmt"
-	"io"
 	"net"
 	"strings"
 	"time"
@@ -45,13 +44,14 @@ func (s *TLSServer) handle(conn net.Conn) {
 		return
 	}
 	s.logger.Infof("TLS cliente: %s", trim(line))
-	if _, _, err := readHeaders(br); err != nil {
+	_, _, wsKey, err := readHeaders(br)
+	if err != nil {
 		return
 	}
 	// Limpiar deadline tras el handshake HTTP
 	conn.SetDeadline(time.Time{})
 
-	if _, err := io.WriteString(conn, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n"); err != nil {
+	if err := writeUpgrade(conn, wsKey); err != nil {
 		return
 	}
 

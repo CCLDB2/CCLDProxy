@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"io"
 	"net"
 	"time"
 )
@@ -62,15 +61,15 @@ func (s *Server) handleClient(c *Client) {
 	}
 	s.logger.Infof("cliente %s pidio: %s", c.ip, trim(line))
 
-	// Leer headers hasta linea en blanco, capturando Upgrade y User-Agent
-	_, agent, err := readHeaders(br)
+	// Leer headers hasta linea en blanco, capturando Upgrade, User-Agent y key
+	_, agent, wsKey, err := readHeaders(br)
 	if err != nil {
 		return
 	}
 	c.agent = agent
 
-	// Siempre responder 101 (upgrade), como hace el proxy original.
-	if _, err := io.WriteString(c.conn, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n"); err != nil {
+	// Responder 101 con handshake websocket RFC 6455 (si el cliente mando key).
+	if err := writeUpgrade(c.conn, wsKey); err != nil {
 		return
 	}
 

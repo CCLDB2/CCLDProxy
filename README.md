@@ -1,14 +1,14 @@
 # ccldproxy
 
-Servidor de túneles SSH/OpenVPN/V2Ray (motor `proxy`) con menú (`ccldproxy`) para uso personal / amigos.
+Servidor de túneles SSH/OpenVPN/V2Ray, reescrito en **Go** desde cero. Código 100% propio.
 
 ## Contenido
 
-- `bin/proxy` — motor de túneles (por defecto `/usr/bin/proxy`).
-- `bin/ccldproxy` — menú (renombrado de `dtmenu`), usa `/usr/bin/proxy`.
-- `install.sh` — instalador por enlace (dependencias, sshd, usuario SSH, abre puerto 80).
-- `scripts/user.sh` — gestión de usuarios SSH (crear/listar/borrar/pass).
-- `version` — versión del paquete.
+- `bin/ccldproxy` — motor de túneles (Go). Detecta protocolo por el payload inicial y reenvía raw TCP al backend (SSH:22, OpenVPN:1194, V2Ray:1080).
+- `scripts/dtmenu` — menú de configuración (se ejecuta como `dtmenu` en root).
+- `scripts/user.sh` — gestión de usuarios SSH.
+- `src/` — código fuente Go del motor.
+- `install.sh` — instalador por enlace.
 
 ## Instalación por enlace
 
@@ -16,31 +16,51 @@ Servidor de túneles SSH/OpenVPN/V2Ray (motor `proxy`) con menú (`ccldproxy`) p
 bash <(curl -sL https://raw.githubusercontent.com/CCLDB2/CCLDProxy/main/install.sh)
 ```
 
-O bien:
+Luego, para configurar y arrancar:
 
 ```bash
-curl -sL -o install.sh https://raw.githubusercontent.com/CCLDB2/CCLDProxy/main/install.sh
-bash install.sh
+dtmenu
 ```
 
 ## Uso manual del motor
 
 ```bash
 # abrir túnel en el puerto 80
-sudo /usr/bin/proxy --token MI_CLAVE --port 80
+sudo ccldproxy --token MI_CLAVE --port 80
 
-# menú interactivo
-sudo /usr/bin/ccldproxy
+# con límite de 20 conexiones por IP
+sudo ccldproxy --token MI_CLAVE --port 80 --max-per-ip 20
+
+# HTTPS (con certificado y clave separados)
+sudo ccldproxy --token MI_CLAVE --port 443 --https --cert cert.pem --key key.pem
+
+# modo silencioso
+sudo ccldproxy --token MI_CLAVE --port 80 --quiet
 ```
+
+## Opciones del motor
+
+| Flag | Descripción |
+|------|-------------|
+| `--token` | token de acceso |
+| `--port` | puerto de escucha (default 80) |
+| `--max-per-ip` | límite de conexiones por IP (0 = sin límite) |
+| `--https` | usar HTTPS (con `--cert` y `--key`) |
+| `--cert` / `--key` | certificado y clave separados |
+| `--workers` | número de trabajadores (default 1000) |
+| `--quiet` | modo silencioso |
+| `--validate` | validar token y salir |
 
 ## Requisitos
 
-- Ubuntu/Debian (probado en Ubuntu 20.04/22.04).
-- Los binarios requieren `libssl.so.1.1`, `libcurl.so.4`, `libstdc++6` (los instala `install.sh`).
+- Ubuntu/Debian.
+- El motor Go es **binario estático** (no necesita libssl/libcurl).
 - Ejecutar como root.
 
-## Notas
+## Mejoras vs. el binario original
 
-- El motor `proxy` acepta token de validación (modo crack local: acepta cualquier token, no valida contra servidor).
-- El puerto por defecto es 80. Cambia `CCLD_PORT` si quieres otro.
-- Sin límite por IP.
+- Certificado y clave **separados** (`--cert` + `--key`).
+- **Timeout** de conexión al backend (no se cuelga).
+- Límite opcional de conexiones por IP (`--max-per-ip`, anti-DoS).
+- Logs con nivel y modo `--quiet`.
+- Configuración por servicio systemd vía `dtmenu`.

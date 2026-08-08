@@ -1,23 +1,22 @@
 #!/bin/bash
 #============================================================================
 #  ccldproxy - Instalador
-#  Servidor de tuneles SSH/OpenVPN/V2Ray (proxy) + menu (ccldproxy)
-#  Uso personal / amigos. No incluye panel SSHPlus.
+#  Servidor de tuneles SSH/OpenVPN/V2Ray (proxy Go propio) + menu (dtmenu)
+#  Uso personal / amigos. Codigo 100% propio.
 #
 #  Instalacion por enlace:
 #    bash <(curl -sL https://raw.githubusercontent.com/CCLDB2/CCLDProxy/main/install.sh)
 #============================================================================
 
 set -e
-
-# No abortar en pasos opcionales; solo fallar en criticos
 set +e
 
 CCLD_BIN="ccldproxy"
-PROXY_BIN="proxy"
+DTMENU_BIN="dtmenu"
 BASE_URL="${CCLD_URL:-https://raw.githubusercontent.com/CCLDB2/CCLDProxy/main}"
 INSTALL_DIR="/usr/bin"
-LISTEN_PORT="${CCLD_PORT:-80}"
+CONF_DIR="/etc/ccldproxy"
+SERVICE="ccldproxy"
 
 bold()   { echo -e "\033[1m$1\033[0m"; }
 green()  { echo -e "\033[1;32m$1\033[0m"; }
@@ -39,98 +38,65 @@ else
 fi
 CODENAME="$(grep -oP '(?<=VERSION_CODENAME=).*' /etc/os-release)"
 green "Detectado: $DISTRO ($CODENAME)"
-green "Leyendo checksums de version remota..."
-REMOTE_VER="$(curl -fsSL "$BASE_URL/version" 2>/dev/null || echo 'dev')"
-echo "  version remota: $REMOTE_VER"
 
 # --- Instalar dependencias ------------------------------------------------
 yellow "Instalando dependencias..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y >/dev/null 2>&1 || true
-# OpenSSL 1.1 y curl: proxy enlaza contra libssl.so.1.1 / libcurl.so.4
-if [[ "$DISTRO" == "ubuntu" && "$CODENAME" == "jammy" ]]; then
-  # 22.04 no trae libssl1.1 en repos: bajar paquete de focal
-  green "Ubuntu 22.04: instalando libssl1.1 desde focal..."
-  curl -fsSL -o /tmp/libssl1.1.deb \
-    "http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.20_amd64.deb" \
-    || yellow "  (no se pudo bajar libssl1.1, continuando)"
-  dpkg -i /tmp/libssl1.1.deb >/dev/null 2>&1 || apt-get install -y -f >/dev/null 2>&1 || true
-fi
 apt-get install -y --no-install-recommends \
-    openssl libcurl4 libstdc++6 curl ca-certificates net-tools ufw >/dev/null 2>&1 || true
+    openssl curl ca-certificates net-tools ufw openssh-server systemd >/dev/null 2>&1 || true
 
-# --- Descargar binarios desde el repo --------------------------------------
-green "Descargando binarios desde el repo..."
+# --- Descargar binarios y scripts desde el repo ---------------------------
+green "Descargando archivos desde el repo..."
 TMP="$(mktemp -d)"
-for BIN in "$PROXY_BIN" "$CCLD_BIN"; do
-  echo "  $BIN -> $BASE_URL/bin/$BIN"
-  curl -fsSL -o "$TMP/$BIN" "$BASE_URL/bin/$BIN" || { red "Fallo descargando $BIN"; exit 1; }
-done
+curl -fsSL -o "$TMP/$CCLD_BIN" "$BASE_URL/bin/$CCLD_BIN"  || { red "Fallo descargando $CCLD_BIN"; exit 1; }
+curl -fsSL -o "$TMP/$DTMENU_BIN" "$BASE_URL/scripts/$DTMENU_BIN" || { red "Fallo descargando $DTMENU_BIN"; exit 1; }
+curl -fsSL -o "$TMP/user.sh" "$BASE_URL/scripts/user.sh" || true
 
-# Verificar que el proxy podra ejecutarse
-ldd "$TMP/$PROXY_BIN" 2>/dev/null | grep -q "not found" && yellow "  (verifica libssl/libcurl con 'ldd proxy')" || true
-
-# --- Instalar binarios ----------------------------------------------------
-green "Instalando binarios en $INSTALL_DIR ..."
-install -m 0755 "$TMP/$PROXY_BIN" "$INSTALL_DIR/$PROXY_BIN"
+# --- Instalar -------------------------------------------------------------
+green "Instalando en $INSTALL_DIR ..."
 install -m 0755 "$TMP/$CCLD_BIN"  "$INSTALL_DIR/$CCLD_BIN"
+install -m 0755 "$TMP/$DTMENU_BIN" "$INSTALL_DIR/$DTMENU_BIN"
+install -m 0755 "$TMP/user.sh"    "$INSTALL_DIR/user.sh" 2>/dev/null || true
 rm -rf "$TMP"
 
-# --- Instalar OpenSSH server (gestor ssh) ---------------------------------
+# --- Config de ejemplo ----------------------------------------------------
+mkdir -p "$CONF_DIR"
+if [[ ! -f "$CONF_DIR/config" ]]; then
+  cat > "$CONF_DIR/config" <<EOF
+TOKEN=
+PORT=80
+MAXIP=0
+QUIET=no
+EOF
+  chmod 600 "$CONF_DIR/config"
+fi
+
+# --- Instalar OpenSSH server y configurar ---------------------------------
 green "Instalando/configurando OpenSSH..."
 apt-get install -y --no-install-recommends openssh-server >/dev/null 2>&1 || true
-if command -v sshd >/dev/null 2>&1; then
-  SSHD_CFG="$(sshd -T 2>/dev/null | grep -i '^configfile' | awk '{print $2}')"
-  SSHD_CFG="${SSHD_CFG:-/etc/ssh/sshd_config}"
-else
-  SSHD_CFG="/etc/ssh/sshd_config"
-fi
-# Puerto SSH
+SSHD_CFG="/etc/ssh/sshd_config"
 grep -q '^Port 22' "$SSHD_CFG" 2>/dev/null || sed -i 's/^#Port 22/Port 22/' "$SSHD_CFG" 2>/dev/null || true
-# Permitir login por password (para usuarios creados)
 sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' "$SSHD_CFG" 2>/dev/null || true
 grep -q '^PasswordAuthentication' "$SSHD_CFG" 2>/dev/null || echo "PasswordAuthentication yes" >> "$SSHD_CFG"
-
-systemctl restart ssh >/dev/null 2>&1 || service ssh restart >/dev/null 2>&1 || true
-# Permitir acceso root por password (opcional, descomenta si lo quieres)
-# sed -i 's/^PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
-
 systemctl restart ssh >/dev/null 2>&1 || service ssh restart >/dev/null 2>&1 || true
 
-# --- Guardar IP publica ---------------------------------------------------
+# --- Firewall -------------------------------------------------------------
+green "Abriendo puerto 80 ..."
+ufw allow 80/tcp >/dev/null 2>&1 || true
+ufw allow 22/tcp >/dev/null 2>&1 || true
+ufw reload >/dev/null 2>&1 || true
+
+# --- Resumen --------------------------------------------------------------
 PUBLIC_IP="$(curl -fsSL ipv4.icanhazip.com 2>/dev/null || hostname -I | awk '{print $1}')"
-echo "$PUBLIC_IP" > /etc/ccldproxy_ip 2>/dev/null || true
-green "IP publica: $PUBLIC_IP"
-
-# --- Abrir puerto en firewall --------------------------------------------
-green "Abriendo puerto $LISTEN_PORT ..."
-if command -v ufw >/dev/null 2>&1; then
-  ufw allow "$LISTEN_PORT/tcp" >/dev/null 2>&1 || true
-  ufw allow 22/tcp >/dev/null 2>&1 || true
-  ufw reload >/dev/null 2>&1 || true
-fi
-
-# --- Crear usuario(s) SSH -------------------------------------------------
 green ""
-green "El servidor de tuneles esta listo."
-echo "  - Binario del menu:  $INSTALL_DIR/$CCLD_BIN"
-echo "  - Motor proxy:       $INSTALL_DIR/$PROXY_BIN"
-echo "  - Puerto de tunel:   $LISTEN_PORT"
-echo "  - IP:                $PUBLIC_IP"
+green "Instalacion completa."
+echo "  - Motor:        $INSTALL_DIR/$CCLD_BIN"
+echo "  - Menu:         $INSTALL_DIR/$DTMENU_BIN"
+echo "  - Config:       $CONF_DIR/config"
+echo "  - IP:           $PUBLIC_IP"
 echo ""
-if [[ "${CCLD_CREATE_USER:-yes}" == "yes" ]]; then
-  yellow "Se va a crear un usuario SSH para conectarte."
-  read -rp "Nombre de usuario: " SSH_USER
-  read -rsp "Password para el usuario: " SSH_PASS; echo
-  useradd -m -s /bin/bash "$SSH_USER" 2>/dev/null || true
-  echo "$SSH_USER:$SSH_PASS" | chpasswd
-  green "Usuario '$SSH_USER' creado."
-  echo ""
-  green "Para iniciar el proxy manualmente:"
-  echo "  sudo $INSTALL_DIR/$PROXY_BIN --token CLAVE --port $LISTEN_PORT"
-  echo "  (usa el menu: sudo $INSTALL_DIR/$CCLD_BIN)"
-fi
-
-bold ""
-bold "Listo. Conectate con tu app a: $PUBLIC_IP:$LISTEN_PORT"
-bold "SSH usuario/ip:  $SSH_USER@$PUBLIC_IP (puerto 22)"
+green "Para configurar y arrancar, ejecuta:"
+bold   "  dtmenu"
+echo ""
+echo "  (abre el menu: token, puerto, limite por IP, arrancar servicio)"

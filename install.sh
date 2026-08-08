@@ -56,13 +56,22 @@ fi
 apt-get install -y --no-install-recommends \
     openssl libcurl4 libstdc++6 curl ca-certificates net-tools ufw >/dev/null 2>&1 || true
 
+# --- Descargar binarios desde el repo --------------------------------------
+green "Descargando binarios desde el repo..."
+TMP="$(mktemp -d)"
+for BIN in "$PROXY_BIN" "$CCLD_BIN"; do
+  echo "  $BIN -> $BASE_URL/bin/$BIN"
+  curl -fsSL -o "$TMP/$BIN" "$BASE_URL/bin/$BIN" || { red "Fallo descargando $BIN"; exit 1; }
+done
+
 # Verificar que el proxy podra ejecutarse
-ldd "$PROXY_BIN" 2>/dev/null | grep -q "not found" && yellow "  (verifica libssl/libcurl con 'ldd proxy')" || true
+ldd "$TMP/$PROXY_BIN" 2>/dev/null | grep -q "not found" && yellow "  (verifica libssl/libcurl con 'ldd proxy')" || true
 
 # --- Instalar binarios ----------------------------------------------------
 green "Instalando binarios en $INSTALL_DIR ..."
-install -m 0755 "$PROXY_BIN" "$INSTALL_DIR/$PROXY_BIN"
-install -m 0755 "$CCLD_BIN"  "$INSTALL_DIR/$CCLD_BIN"
+install -m 0755 "$TMP/$PROXY_BIN" "$INSTALL_DIR/$PROXY_BIN"
+install -m 0755 "$TMP/$CCLD_BIN"  "$INSTALL_DIR/$CCLD_BIN"
+rm -rf "$TMP"
 
 # --- Configurar sshd (gestor ssh) ----------------------------------------
 green "Configurando SSH..."
